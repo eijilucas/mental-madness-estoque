@@ -71,8 +71,9 @@ function renderProductPanel(product, kind) {
         )
         .join("");
 
+      const rowKey = `${product.id}::${r.size}::${r.color || ""}`;
       return `
-        <tr>
+        <tr data-row-key="${rowKey}">
           <td class="size">${r.size}</td>
           ${hasColor ? `<td>${r.color || "—"}</td>` : ""}
           ${cols}
@@ -115,14 +116,38 @@ function renderSectionLabel(text) {
 }
 
 function renderAlertbar(products) {
-  let criticalCount = 0;
+  const critical = [];
   for (const product of products) {
     for (const row of product.sizes) {
-      if (row.critico) criticalCount += 1;
+      if (row.critico) {
+        critical.push({
+          rowKey: `${product.id}::${row.size}::${row.color || ""}`,
+          name: product.name,
+          size: row.size,
+          color: row.color || null,
+          estoque: row.restantes ?? row.estoqueReal,
+        });
+      }
     }
   }
-  document.getElementById("bell-count").textContent = criticalCount;
-  document.getElementById("bell-count").classList.toggle("zero", criticalCount === 0);
+
+  document.getElementById("bell-count").textContent = critical.length;
+  document.getElementById("bell-count").classList.toggle("zero", critical.length === 0);
+
+  const list = document.getElementById("bell-list");
+  if (critical.length === 0) {
+    list.innerHTML = `<div class="bellpanel-empty">Nenhum item crítico agora.</div>`;
+    return;
+  }
+  list.innerHTML = critical
+    .map(
+      (item) => `
+        <button class="bellpanel-item" data-row-key="${item.rowKey}">
+          <span class="name">${item.name}</span>
+          <span class="meta">${item.size}${item.color ? " · " + item.color : ""} — estoque ${item.estoque}</span>
+        </button>`
+    )
+    .join("");
 }
 
 function renderKpis(summary) {
@@ -237,6 +262,32 @@ async function render() {
 document.getElementById("logout-btn").addEventListener("click", async () => {
   await fetch("/api/auth/logout", { method: "POST" });
   window.location.href = "/login.html";
+});
+
+const bellBtn = document.getElementById("bell-btn");
+const bellPanel = document.getElementById("bell-panel");
+
+bellBtn.addEventListener("click", (ev) => {
+  ev.stopPropagation();
+  bellPanel.hidden = !bellPanel.hidden;
+});
+
+document.addEventListener("click", (ev) => {
+  if (!bellPanel.hidden && !bellPanel.contains(ev.target) && ev.target !== bellBtn) {
+    bellPanel.hidden = true;
+  }
+});
+
+document.getElementById("bell-list").addEventListener("click", (ev) => {
+  const item = ev.target.closest(".bellpanel-item");
+  if (!item) return;
+  bellPanel.hidden = true;
+  const row = document.querySelector(`tr[data-row-key="${item.dataset.rowKey}"]`);
+  if (!row) return;
+  row.scrollIntoView({ behavior: "smooth", block: "center" });
+  row.classList.remove("flash-highlight");
+  void row.offsetWidth; // reinicia a animação se clicar de novo no mesmo item
+  row.classList.add("flash-highlight");
 });
 
 render();
