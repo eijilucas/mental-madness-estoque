@@ -1,0 +1,18 @@
+name: Sincronizar Shopify
+
+# O Vercel Hobby (grátis) só deixa Cron rodar 1x por dia, então quem
+# dispara a sincronização a cada 5 min é o GitHub Actions — só chama o
+# endpoint /api/cron-sync já publicado, não roda nada pesado aqui.
+on:
+  schedule:
+    - cron: "*/5 * * * *"
+  workflow_dispatch: {}
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Chamar /api/cron-sync
+        run: |
+          curl -sf -X GET "https://mm-producao.vercel.app/api/cron-sync" \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}"
