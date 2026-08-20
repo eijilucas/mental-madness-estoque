@@ -230,27 +230,6 @@ async function render() {
   }
 }
 
-const syncBtn = document.getElementById("sync-btn");
-syncBtn.addEventListener("click", async () => {
-  syncBtn.disabled = true;
-  const original = syncBtn.textContent;
-  syncBtn.textContent = "Sincronizando…";
-  try {
-    const res = await fetch("/api/sync", { method: "POST" });
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.error || "Falha ao sincronizar");
-    if (data.synced === false) {
-      alert(data.reason);
-    }
-    await render();
-  } catch (err) {
-    alert(err.message);
-  } finally {
-    syncBtn.disabled = false;
-    syncBtn.textContent = original;
-  }
-});
-
 render();
 
 // Recarrega os dados sozinho, sem precisar apertar F5 — o servidor já
