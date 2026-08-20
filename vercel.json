@@ -1,6 +1,8 @@
 {
   "rewrites": [
     { "source": "/", "destination": "/public/dashboard.html" },
+    { "source": "/login.html", "destination": "/public/login.html" },
+    { "source": "/login.js", "destination": "/public/login.js" },
     { "source": "/style.css", "destination": "/public/style.css" },
     { "source": "/dashboard.js", "destination": "/public/dashboard.js" },
     { "source": "/logo.png", "destination": "/public/logo.png" },

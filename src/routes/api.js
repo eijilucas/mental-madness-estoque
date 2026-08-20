@@ -3,12 +3,24 @@ const { calcExclusivo, calcBasico, isCritico } = require("../calc/produce");
 const { variantKey } = require("../calc/variantKey");
 const { markProcessado, syncAll, configuredStores } = require("../shopify/sync");
 const { applyLabelGenerated, applyLabelCancelled } = require("../mmEtiquetas");
+const { loginWithPassword } = require("../auth/supabaseAuth");
+const { setSessionCookies, clearSessionCookies, getSessionUser } = require("../auth/session");
 
 function isAuthorized(req) {
   const expected = process.env.MM_ETIQUETAS_SECRET;
   const got = (req.headers.authorization || "").replace(/^Bearer\s+/i, "");
   return Boolean(expected) && got === expected;
 }
+
+// Rotas que não exigem sessão logada — login em si, o cron (usa CRON_SECRET)
+// e os webhooks do mm-etiquetas (usam MM_ETIQUETAS_SECRET, checado à parte
+// em isAuthorized).
+const PUBLIC_ROUTES = new Set([
+  "/api/auth/login",
+  "/api/cron-sync",
+  "/api/mm-etiquetas/label-generated",
+  "/api/mm-etiquetas/label-cancelled",
+]);
 
 async function buildProductionList() {
   const db = await load();
@@ -95,6 +107,44 @@ function readJsonBody(req) {
 // Retorna true se tratou a rota, false se não é uma rota de API conhecida.
 async function handleApi(req, res, url) {
   res.setHeader("Content-Type", "application/json; charset=utf-8");
+
+  if (req.method === "POST" && url.pathname === "/api/auth/login") {
+    try {
+      const { email, password } = await readJsonBody(req);
+      if (!email || !password) {
+        res.statusCode = 400;
+        res.end(JSON.stringify({ error: "E-mail e senha são obrigatórios" }));
+        return true;
+      }
+      const session = await loginWithPassword(email, password);
+      if (!session || !session.access_token) {
+        res.statusCode = 401;
+        res.end(JSON.stringify({ error: "E-mail ou senha inválidos" }));
+        return true;
+      }
+      setSessionCookies(req, res, session);
+      res.end(JSON.stringify({ ok: true }));
+    } catch (err) {
+      res.statusCode = 400;
+      res.end(JSON.stringify({ error: "JSON inválido" }));
+    }
+    return true;
+  }
+
+  if (req.method === "POST" && url.pathname === "/api/auth/logout") {
+    clearSessionCookies(req, res);
+    res.end(JSON.stringify({ ok: true }));
+    return true;
+  }
+
+  if (!PUBLIC_ROUTES.has(url.pathname)) {
+    const user = await getSessionUser(req, res);
+    if (!user) {
+      res.statusCode = 401;
+      res.end(JSON.stringify({ error: "Não autenticado" }));
+      return true;
+    }
+  }
 
   if (req.method === "GET" && url.pathname === "/api/production") {
     const list = await buildProductionList();

@@ -1,5 +1,9 @@
 async function fetchProduction() {
   const res = await fetch("/api/production");
+  if (res.status === 401) {
+    window.location.href = "/login.html";
+    throw new Error("Não autenticado");
+  }
   if (!res.ok) throw new Error("Falha ao carregar /api/production");
   return res.json();
 }
@@ -229,6 +233,11 @@ async function render() {
     groups.innerHTML = `<div class="panel"><div class="error">Erro ao carregar: ${err.message}</div></div>`;
   }
 }
+
+document.getElementById("logout-btn").addEventListener("click", async () => {
+  await fetch("/api/auth/logout", { method: "POST" });
+  window.location.href = "/login.html";
+});
 
 render();
 

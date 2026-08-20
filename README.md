@@ -78,14 +78,26 @@ npm start   # sobe em http://localhost:3000, já lendo o .env
   de drop antigo cadastrado nela por engano — isso esconde pelo nome até a
   loja ser limpa de verdade no Shopify.
 
+## Login (`src/auth/`)
+
+- Autenticação usa o **Supabase Auth** direto (GoTrue REST API, sem SDK) —
+  os usuários são criados manualmente no painel do Supabase em
+  **Authentication > Users**, não existe cadastro pelo próprio app.
+- `POST /api/auth/login` troca e-mail/senha por uma sessão do Supabase e
+  guarda o `access_token`/`refresh_token` em cookies `httpOnly` (`mm_at` e
+  `mm_rt`). Toda rota de `/api/*` (exceto `/api/auth/login` e
+  `/api/cron-sync`, que usa o próprio `CRON_SECRET`) exige essa sessão.
+- Sessão expira em 1h e é renovada sozinha pelo refresh token
+  (`src/auth/session.js`) sem precisar logar de novo toda hora.
+- Tela de login em `/login.html`; o painel redireciona pra lá sozinho se a
+  API responder 401.
+
 ## O que ainda falta
 
 - [ ] Webhook de verdade (`orders/fulfilled`/`orders/cancelled`) em vez de
       depender só do polling — reagiria na hora, não em até 5 min.
 - [ ] Preencher o estoque real inicial de cada variante (hoje começa em 0
       pra tudo que nunca foi ajustado manualmente).
-- [ ] Autenticação no painel — hoje qualquer um com o link vê e ajusta
-      estoque.
 - [ ] Paginação além de 250 itens por loja no Shopify (limite de 5 páginas
       por segurança em `src/shopify/client.js`).
 - [ ] Limpar a loja `m3ntalmadness.myshopify.com` de verdade (aí dá pra tirar
