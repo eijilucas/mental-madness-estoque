@@ -2,6 +2,13 @@ const { load, save } = require("../db");
 const { calcExclusivo, calcBasico, isCritico } = require("../calc/produce");
 const { variantKey } = require("../calc/variantKey");
 const { markProcessado, syncAll, configuredStores } = require("../shopify/sync");
+const { applyLabelGenerated, applyLabelCancelled } = require("../mmEtiquetas");
+
+function isAuthorized(req) {
+  const expected = process.env.MM_ETIQUETAS_SECRET;
+  const got = (req.headers.authorization || "").replace(/^Bearer\s+/i, "");
+  return Boolean(expected) && got === expected;
+}
 
 async function buildProductionList() {
   const db = await load();
@@ -189,6 +196,55 @@ async function handleApi(req, res, url) {
       }
       await markProcessado(body.orderId);
       res.end(JSON.stringify({ ok: true }));
+    } catch (err) {
+      res.statusCode = 400;
+      res.end(JSON.stringify({ error: err.message }));
+    }
+    return true;
+  }
+
+  // Chamado pelo mm-etiquetas assim que ele gera uma etiqueta — desconta o
+  // estoque real da(s) variante(s) do pedido. Idempotente (ver mmEtiquetas.js),
+  // então retry/reprocessamento do lado do mm-etiquetas é seguro.
+  if (req.method === "POST" && url.pathname === "/api/mm-etiquetas/label-generated") {
+    if (!isAuthorized(req)) {
+      res.statusCode = 401;
+      res.end(JSON.stringify({ error: "Não autorizado" }));
+      return true;
+    }
+    try {
+      const body = await readJsonBody(req);
+      if (!body.shopifyOrderId || !Array.isArray(body.items)) {
+        res.statusCode = 400;
+        res.end(JSON.stringify({ error: "shopifyOrderId e items (array) são obrigatórios" }));
+        return true;
+      }
+      const result = await applyLabelGenerated(body.shopifyOrderId, body.items);
+      res.end(JSON.stringify({ ok: true, ...result }));
+    } catch (err) {
+      res.statusCode = 400;
+      res.end(JSON.stringify({ error: err.message }));
+    }
+    return true;
+  }
+
+  // Contrapartida: chamado quando o mm-etiquetas cancela uma etiqueta já
+  // comprada — devolve o estoque só do que realmente tinha sido descontado.
+  if (req.method === "POST" && url.pathname === "/api/mm-etiquetas/label-cancelled") {
+    if (!isAuthorized(req)) {
+      res.statusCode = 401;
+      res.end(JSON.stringify({ error: "Não autorizado" }));
+      return true;
+    }
+    try {
+      const body = await readJsonBody(req);
+      if (!body.shopifyOrderId || !Array.isArray(body.items)) {
+        res.statusCode = 400;
+        res.end(JSON.stringify({ error: "shopifyOrderId e items (array) são obrigatórios" }));
+        return true;
+      }
+      const result = await applyLabelCancelled(body.shopifyOrderId, body.items);
+      res.end(JSON.stringify({ ok: true, ...result }));
     } catch (err) {
       res.statusCode = 400;
       res.end(JSON.stringify({ error: err.message }));
