@@ -14,5 +14,5 @@ jobs:
     steps:
       - name: Chamar /api/cron-sync
         run: |
-          curl -sf -X GET "https://mm-producao.vercel.app/api/cron-sync" \
+          curl -sf -X GET "https://mental-estoque.vercel.app/api/cron-sync" \
             -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}"
