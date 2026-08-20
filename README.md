@@ -1,78 +1,95 @@
 # Mental Madness - Estoque
 
-Sistema de produção sob demanda pros drops exclusivos e itens básicos, baseado
-nos pedidos "processado / não processado" do Shopify. Ver o playbook completo
-(regras, exemplos, mockup original) no artifact que gerou esse projeto.
+Sistema de produção sob demanda pros drops exclusivos e itens básicos,
+baseado nos pedidos "processado / não processado" das duas lojas Shopify.
 
-## Rodar local
-
-Só precisa de Node.js 18+. Sem `npm install` — o MVP não usa nenhuma
-dependência externa.
-
-```bash
-npm run seed   # popula data/db.json com os dados de exemplo
-npm start      # sobe o servidor em http://localhost:3000
-```
-
-Abra `http://localhost:3000` — é o painel de produção, já ligado na API.
+**Em produção:** https://mental-estoque.vercel.app
+**Repositório:** https://github.com/eijilucas/mental-madness-estoque (privado)
 
 ## Como está estruturado
 
 ```
 src/
-  server.js        servidor HTTP puro (sem framework), serve o painel + API
-  db.js             persistência em arquivo JSON (data/db.json)
-  calc/produce.js   as duas regras: exclusivo e básico, + cálculo de crítico
-  shopify/sync.js   busca pedidos — cai pro stub local se faltar CLIENT_ID
-  shopify/auth.js   troca client_id + client_secret por access_token
-  routes/api.js     endpoints da API
-public/
-  dashboard.html/js/css   painel (mesmo visual do mockup, agora ligado a dados reais)
-data/db.json        "banco de dados" — produtos, tamanhos, pedidos, config
-scripts/seed.js      gera o data/db.json de exemplo
+  server.js          servidor HTTP puro — só pra rodar local (npm start)
+  db.js              persistência no Supabase (Postgres via REST)
+  supabase.js        cliente HTTP mínimo pra API REST do Supabase
+  calc/produce.js    as duas regras (exclusivo/básico) + cálculo de crítico
+  calc/variantKey.js chave única de tamanho+cor, usada em todo lugar
+  shopify/auth.js    troca client_id + client_secret por access_token
+  shopify/client.js  chamada autenticada + paginação na Admin API
+  shopify/mapping.js Shopify → formato interno (produto/variante/pedido)
+  shopify/sync.js    orquestra a sincronização das duas lojas
+  routes/api.js      endpoints da API (usados local e no Vercel)
+api/index.js         function serverless do Vercel — delega pro routes/api.js
+public/               painel (HTML/CSS/JS), tema da marca (Horst Blackletter + Cinzel + Oswald)
+vercel.json           rewrites de estático + roteamento de /api
+.github/workflows/    sincroniza a cada 5 min via GitHub Actions
 ```
+
+## Rodar local
+
+Precisa de Node 20.6+ e das credenciais no `.env` (copiar de `.env.example`).
+Sem `npm install` — não usa nenhuma dependência externa, só `fetch` nativo.
+
+```bash
+npm start   # sobe em http://localhost:3000, já lendo o .env
+```
+
+## Deploy (Vercel + Supabase + GitHub Actions)
+
+- **Dados**: Postgres no Supabase (tabelas `drops`, `products`, `variants`,
+  `orders` — ver SQL no histórico do projeto ou recriar a partir de `src/db.js`).
+- **App**: Vercel, deployado a partir do GitHub (`git push` na branch
+  `master` dispara redeploy automático). Pra deploy manual: `npx vercel deploy --prod`.
+- **Variáveis de ambiente**: as mesmas do `.env` local, cadastradas em
+  Production e Preview via `npx vercel env add NOME production`.
+- **Sincronização automática**: o Vercel Hobby (grátis) só libera Cron 1x/dia,
+  então quem dispara a cada 5 minutos é o GitHub Actions
+  (`.github/workflows/sync.yml`), chamando `GET /api/cron-sync` com o header
+  `Authorization: Bearer $CRON_SECRET`. O secret precisa existir nos dois
+  lugares: `CRON_SECRET` no Vercel **e** `gh secret set CRON_SECRET` no repo.
 
 ## Regras implementadas (ver `src/calc/produce.js`)
 
-- **Exclusivo**: `produzir = máx(0, não processados − restantes)`
+- **Exclusivo**: `produzir = máx(0, não processados − restantes)` — sem
+  estoque de segurança, drop fechado = lista final, não recalcula mais.
 - **Básico**: `produzir = máx(0, mínimo − estoque real)`, mínimo por produto
-  (calças = 15, demais = 10, todos os tamanhos)
-- **Crítico**: `estoque restante < 10` — dispara o alerta visual (sino + faixa),
-  não dispara produção
+  (calças = 15, demais = 10, todos os tamanhos).
+- **Crítico**: `estoque restante < 10` — dispara o alerta visual, não dispara
+  produção.
+- Cada **tamanho + cor** é tratado como variante própria — duas cores do
+  mesmo tamanho são peças diferentes pra produzir.
 
-## O que falta pra ligar no Shopify de verdade
+## Sincronização com o Shopify (`src/shopify/`)
 
-1. Criar um **custom app** na loja Shopify (Configurações → Apps e canais de
-   vendas → Desenvolver apps) com só estes dois escopos, ambos de leitura:
-   - `read_orders` — pra puxar `fulfillment_status` (processado/não processado)
-     e registrar o webhook de pedido enviado/cancelado
-   - `read_products` — pra mapear variante → produto/tamanho (SKU, título da
-     variante)
-   Não precisa de `read_inventory`: o Shopify vai mostrar sempre 500 por
-   variante (número falso, só pra não travar venda), e o sistema ignora esse
-   campo de propósito — o estoque real vive só aqui. Também não precisa de
-   nenhum escopo de escrita, já que o sistema nunca altera nada no Shopify.
-2. Pegar o **Client ID** e o **Client Secret** nas credenciais da API do app
-   (o Client Secret é o `shpss_...` que já está guardado no `.env`). Não existe
-   mais token fixo pra copiar — o app troca essas duas credenciais por um
-   `access_token` em tempo real, via **client credentials grant**:
-   ```
-   POST https://{shop}.myshopify.com/admin/oauth/access_token
-   { "client_id": "...", "client_secret": "...", "grant_type": "client_credentials" }
-   ```
-   Isso já está implementado em `src/shopify/auth.js` — só falta preencher
-   `SHOPIFY_BASICO_CLIENT_ID` e `SHOPIFY_EXCLUSIVO_CLIENT_ID` no `.env`.
-3. Assim que os dois `CLIENT_ID` estiverem no `.env`, `fetchOrdersFromShopify()`
-   em `src/shopify/sync.js` já passa a buscar pedido de verdade nas duas lojas
-   (hoje cai pro stub local automaticamente enquanto faltar credencial) — falta
-   só mapear o formato do pedido do Shopify pro formato interno
-   (`{ id, productId, size, status }`) usando SKU/variant_id.
-4. Cadastrar um webhook de `orders/fulfilled` (e `orders/cancelled`) apontando
-   pra um endpoint novo (ex: `/webhooks/orders-fulfilled`) que chame
-   `markProcessado()` automaticamente, em vez de precisar chamar
-   `/api/orders/mark-processado` na mão.
-5. Deixar cada variante do Shopify sempre com **500 no estoque** (fixo) — é só
-   pra não travar venda, o sistema ignora esse número no cálculo.
+- Autenticação: **client credentials grant** — troca `client_id` +
+  `client_secret` por um `access_token` via
+  `POST https://{shop}.myshopify.com/admin/oauth/access_token`. Sem token fixo
+  pra copiar/colar.
+- Escopos do custom app: só `read_orders` e `read_products` (leitura).
+  **Não precisa de `read_inventory`**: o Shopify sempre mostra 500 por
+  variante (número falso, só pra não travar venda) — o sistema ignora esse
+  campo e mantém o estoque real só aqui.
+- **Drop atual do exclusivo**: auto-detectado (pega o produto mais recente
+  com título "Peça - Nome Do Drop" e usa esse nome como filtro). Só
+  preencher `SHOPIFY_EXCLUSIVO_CURRENT_DROP` no `.env` se precisar forçar
+  manualmente.
+- **Paliativo** (`SHOPIFY_BASICO_EXCLUDE_DROPS`): a loja básico tem produto
+  de drop antigo cadastrado nela por engano — isso esconde pelo nome até a
+  loja ser limpa de verdade no Shopify.
+
+## O que ainda falta
+
+- [ ] Webhook de verdade (`orders/fulfilled`/`orders/cancelled`) em vez de
+      depender só do polling — reagiria na hora, não em até 5 min.
+- [ ] Preencher o estoque real inicial de cada variante (hoje começa em 0
+      pra tudo que nunca foi ajustado manualmente).
+- [ ] Autenticação no painel — hoje qualquer um com o link vê e ajusta
+      estoque.
+- [ ] Paginação além de 250 itens por loja no Shopify (limite de 5 páginas
+      por segurança em `src/shopify/client.js`).
+- [ ] Limpar a loja `m3ntalmadness.myshopify.com` de verdade (aí dá pra tirar
+      o paliativo `SHOPIFY_BASICO_EXCLUDE_DROPS`).
 
 ## Pendências de negócio (confirmar com o Vitor)
 
