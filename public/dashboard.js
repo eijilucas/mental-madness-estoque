@@ -83,17 +83,11 @@ function renderProductPanel(product, kind) {
       ? `<span class="pill closed">encerrado</span>`
       : "";
 
-  const note =
-    kind === "exclusivo"
-      ? "produzir = máx(0, não processados − restantes)"
-      : "produzir = mínimo − estoque real · mínimo: calças 15, demais 10";
-
   return `
     <div class="panel">
       <div class="panel-head">
         <h2><span class="swatch ${kind === "exclusivo" ? "excl" : "basico"}"></span>${product.name}</h2>
         ${closedPill}
-        <span class="note">${note}</span>
       </div>
       <div class="tablescroll">
       <table class="prod">

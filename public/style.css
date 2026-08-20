@@ -118,9 +118,6 @@ body {
 .panel-head h2 .swatch { width: 9px; height: 9px; border-radius: 2px; }
 .panel-head h2 .swatch.excl { background: var(--text-primary); }
 .panel-head h2 .swatch.basico { background: var(--text-label); }
-.panel-head .note {
-  font-family: var(--mono); font-size: 12px; color: var(--text-label); font-weight: 400;
-}
 .panel-head .pill.closed { margin: 0; }
 .panel-body { padding: 20px 24px; }
 
