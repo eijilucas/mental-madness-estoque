@@ -38,10 +38,6 @@ function statusPills(row) {
   return `<span class="statuscell">${pills.join("")}</span>`;
 }
 
-function critDot(row) {
-  return row.critico ? `<span class="critdot"></span>` : "";
-}
-
 // Uma tabela por produto — tamanho e cor como colunas separadas (a coluna de
 // cor só aparece se o produto tiver variação de cor), pra não repetir o nome
 // do produto em toda linha nem misturar as duas dimensões numa coisa só.
@@ -73,7 +69,7 @@ function renderProductPanel(product, kind) {
 
       return `
         <tr>
-          <td class="size">${r.size}${critDot(r)}</td>
+          <td class="size">${r.size}</td>
           ${hasColor ? `<td>${r.color || "—"}</td>` : ""}
           ${cols}
           <td class="produce ${r.produzir > 0 ? "pos" : "zero"}">${r.produzir}</td>

@@ -198,8 +198,6 @@ td.produce.pos { color: var(--text-primary); }
 .pill.closed::before { display: none; }
 .statuscell { display: flex; gap: 6px; flex-wrap: nowrap; white-space: nowrap; }
 
-.critdot { display: inline-block; width: 5px; height: 5px; border-radius: 50%; border: 1px solid var(--accent); background: transparent; margin-left: 6px; vertical-align: middle; }
-
 .stockcell { display: inline-flex; align-items: center; gap: 9px; }
 .stockcell .stockval {
   min-width: 1.4em; text-align: right; cursor: pointer;
