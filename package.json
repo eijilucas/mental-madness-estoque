@@ -1,0 +1,15 @@
+{
+  "name": "mental-madness-estoque",
+  "version": "0.1.0",
+  "description": "MVP do sistema de produção sob demanda (drops exclusivos e básicos) baseado em pedidos do Shopify",
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node --env-file-if-exists=.env src/server.js",
+    "seed": "node scripts/seed.js",
+    "test:shopify-auth": "node --env-file=.env scripts/test-shopify-auth.js"
+  },
+  "engines": {
+    "node": ">=20.6"
+  },
+  "license": "UNLICENSED"
+}

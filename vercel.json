@@ -1,0 +1,11 @@
+{
+  "rewrites": [
+    { "source": "/", "destination": "/public/dashboard.html" },
+    { "source": "/style.css", "destination": "/public/style.css" },
+    { "source": "/dashboard.js", "destination": "/public/dashboard.js" },
+    { "source": "/logo.png", "destination": "/public/logo.png" },
+    { "source": "/favicon.png", "destination": "/public/favicon.png" },
+    { "source": "/fonts/:file", "destination": "/public/fonts/:file" },
+    { "source": "/api/:path*", "destination": "/api/index" }
+  ]
+}
