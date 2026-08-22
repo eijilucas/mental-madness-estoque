@@ -13,15 +13,26 @@ function isAuthorized(req) {
   return Boolean(expected) && got === expected;
 }
 
+// Autenticação do endpoint de leitura de catálogo usado pelo sistema de
+// vendas externas (ver docs/api-contracts/01-catalog-read.md nesse repo).
+// Secret dedicado — não reaproveita MM_ETIQUETAS_SECRET nem CRON_SECRET,
+// pra poder rotacionar cada integração de forma independente.
+function isCatalogReadAuthorized(req) {
+  const expected = process.env.CATALOG_READ_SECRET;
+  const got = (req.headers.authorization || "").replace(/^Bearer\s+/i, "");
+  return Boolean(expected) && got === expected;
+}
+
 // Rotas que não exigem sessão logada — login em si, o cron (usa CRON_SECRET)
-// e os webhooks do mm-etiquetas (usam MM_ETIQUETAS_SECRET, checado à parte
-// em isAuthorized).
+// e os webhooks do mm-etiquetas / vendas externas (usam seus próprios
+// segredos, checados à parte em isAuthorized/isCatalogReadAuthorized).
 const PUBLIC_ROUTES = new Set([
   "/api/auth/login",
   "/api/cron-sync",
   "/api/mm-etiquetas/label-generated",
   "/api/mm-etiquetas/label-cancelled",
   "/api/webhooks/shopify",
+  "/api/catalog/variants",
 ]);
 
 function readRawBody(req) {
@@ -30,6 +41,39 @@ function readRawBody(req) {
     req.on("data", (chunk) => (raw += chunk));
     req.on("end", () => resolve(raw));
     req.on("error", reject);
+  });
+}
+
+// Molda o catálogo no formato do contrato de leitura externo. "active"
+// resolve a mesma regra usada no restante do painel: produto básico está
+// sempre disponível; produto exclusivo só está ativo enquanto o drop dele
+// não foi encerrado (ver README/calc/produce.js — estoqueReal em 0 aqui é
+// normal para exclusivo: produção é sob demanda, não indica indisponibilidade).
+function buildCatalogVariants(db) {
+  const { products, drops } = db;
+  const dropById = Object.fromEntries(drops.map((d) => [d.id, d]));
+
+  return products.map((product) => {
+    const drop = product.dropId ? dropById[product.dropId] : null;
+    const active = product.type === "exclusivo" ? Boolean(drop && drop.status === "ativo" && !drop.closedAt) : true;
+
+    return {
+      id: product.id,
+      name: product.name,
+      type: product.type,
+      category: product.category || null,
+      drop: drop ? { id: drop.id, name: drop.name, status: drop.status } : null,
+      active,
+      variants: Object.entries(product.sizes).map(([variantKey, data]) => ({
+        variantKey,
+        size: data.size,
+        color: data.color || null,
+        estoqueReal: data.estoqueReal,
+        // Preço de venda real vindo da Shopify (sync) — null enquanto o
+        // produto não passou por um sync desde que este campo existe.
+        price: data.price ?? null,
+      })),
+    };
   });
 }
 
@@ -222,6 +266,21 @@ async function handleApi(req, res, url) {
       res.statusCode = 502;
       res.end(JSON.stringify({ error: `Falha ao sincronizar: ${err.message}` }));
     }
+    return true;
+  }
+
+  // Leitura de catálogo para o sistema de vendas externas — somente leitura,
+  // sem side effects. Ver docs/api-contracts/01-catalog-read.md.
+  if (req.method === "GET" && url.pathname === "/api/catalog/variants") {
+    if (!isCatalogReadAuthorized(req)) {
+      res.statusCode = 401;
+      res.end(JSON.stringify({ error: "unauthorized" }));
+      return true;
+    }
+    const db = await load();
+    res.end(
+      JSON.stringify({ syncedAt: new Date().toISOString(), products: buildCatalogVariants(db) }),
+    );
     return true;
   }
 

@@ -33,6 +33,7 @@ async function load() {
       size: v.size,
       color: v.color || null,
       estoqueReal: v.estoque_real,
+      price: v.price != null ? Number(v.price) : null,
     };
   }
 
@@ -103,6 +104,7 @@ async function save(db) {
         size: v.size,
         color: v.color || null,
         estoque_real: v.estoqueReal,
+        price: v.price ?? null,
       });
     }
   }
