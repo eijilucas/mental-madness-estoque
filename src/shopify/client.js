@@ -36,4 +36,19 @@ async function fetchAllPages(store, path) {
   return items;
 }
 
-module.exports = { fetchAllPages };
+// Chamada única (sem paginação) — usado pro setup de webhooks.
+async function shopifyFetch(store, path, options = {}) {
+  const token = await getAccessToken(store.shop, store.clientId, store.clientSecret);
+  const res = await fetch(`https://${store.shop}/admin/api/${API_VERSION}/${path}`, {
+    ...options,
+    headers: { "X-Shopify-Access-Token": token, "Content-Type": "application/json", ...(options.headers || {}) },
+  });
+  if (!res.ok) {
+    const body = await res.text().catch(() => "");
+    throw new Error(`Shopify ${store.shop} ${path} → HTTP ${res.status}: ${body}`);
+  }
+  if (res.status === 204) return null;
+  return res.json();
+}
+
+module.exports = { fetchAllPages, shopifyFetch };

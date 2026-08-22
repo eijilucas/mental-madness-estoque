@@ -1,10 +1,11 @@
 const { load, save } = require("../db");
 const { calcExclusivo, calcBasico, isCritico } = require("../calc/produce");
 const { variantKey } = require("../calc/variantKey");
-const { markProcessado, syncAll, configuredStores } = require("../shopify/sync");
+const { markProcessado, syncAll, syncStoreByShopDomain, configuredStores, STORES } = require("../shopify/sync");
 const { applyLabelGenerated, applyLabelCancelled } = require("../mmEtiquetas");
 const { loginWithPassword } = require("../auth/supabaseAuth");
 const { setSessionCookies, clearSessionCookies, getSessionUser } = require("../auth/session");
+const { verifyHmac } = require("../shopify/webhookAuth");
 
 function isAuthorized(req) {
   const expected = process.env.MM_ETIQUETAS_SECRET;
@@ -20,7 +21,17 @@ const PUBLIC_ROUTES = new Set([
   "/api/cron-sync",
   "/api/mm-etiquetas/label-generated",
   "/api/mm-etiquetas/label-cancelled",
+  "/api/webhooks/shopify",
 ]);
+
+function readRawBody(req) {
+  return new Promise((resolve, reject) => {
+    let raw = "";
+    req.on("data", (chunk) => (raw += chunk));
+    req.on("end", () => resolve(raw));
+    req.on("error", reject);
+  });
+}
 
 async function buildProductionList() {
   const db = await load();
@@ -185,6 +196,31 @@ async function handleApi(req, res, url) {
     } catch (err) {
       res.statusCode = 502;
       res.end(JSON.stringify({ error: `Falha ao sincronizar com o Shopify: ${err.message}` }));
+    }
+    return true;
+  }
+
+  // Webhook do Shopify (orders/create, orders/updated, orders/cancelled) nas
+  // duas lojas — mesmo endpoint pras duas, a X-Shopify-Shop-Domain diz qual
+  // loja mandou e qual secret usar pra validar a assinatura. Reage na hora em
+  // vez de esperar o próximo polling do cron (até 5 min).
+  if (req.method === "POST" && url.pathname === "/api/webhooks/shopify") {
+    const shopDomain = req.headers["x-shopify-shop-domain"];
+    const hmac = req.headers["x-shopify-hmac-sha256"];
+    const store = Object.values(STORES).find((s) => s.shop === shopDomain);
+
+    if (!store || !verifyHmac(await readRawBody(req), hmac, store.clientSecret)) {
+      res.statusCode = 401;
+      res.end(JSON.stringify({ error: "Assinatura inválida" }));
+      return true;
+    }
+
+    try {
+      const result = await syncStoreByShopDomain(shopDomain);
+      res.end(JSON.stringify(result));
+    } catch (err) {
+      res.statusCode = 502;
+      res.end(JSON.stringify({ error: `Falha ao sincronizar: ${err.message}` }));
     }
     return true;
   }

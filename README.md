@@ -92,10 +92,22 @@ npm start   # sobe em http://localhost:3000, já lendo o .env
 - Tela de login em `/login.html`; o painel redireciona pra lá sozinho se a
   API responder 401.
 
+## Webhooks do Shopify (`/api/webhooks/shopify`)
+
+- Escuta `orders/create`, `orders/updated` e `orders/cancelled` nas duas
+  lojas — assim que um pedido muda, o Shopify chama esse endpoint e o
+  sistema resincroniza só a loja daquele pedido na hora, sem esperar o
+  polling de 5 min.
+- Autenticação é por assinatura HMAC (`X-Shopify-Hmac-Sha256`), calculada
+  com o `client_secret` de cada loja — não usa `CRON_SECRET` nem sessão.
+- Pra registrar (ou re-registrar, se a URL de produção mudar):
+  `npm run register-webhooks` (idempotente, pula tópico que já existe).
+- O polling do GitHub Actions continua rodando como rede de segurança —
+  se um webhook falhar por qualquer motivo, o próximo ciclo de 5 min
+  corrige sozinho.
+
 ## O que ainda falta
 
-- [ ] Webhook de verdade (`orders/fulfilled`/`orders/cancelled`) em vez de
-      depender só do polling — reagiria na hora, não em até 5 min.
 - [ ] Preencher o estoque real inicial de cada variante (hoje começa em 0
       pra tudo que nunca foi ajustado manualmente).
 - [ ] Paginação além de 250 itens por loja no Shopify (limite de 5 páginas

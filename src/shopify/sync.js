@@ -106,8 +106,12 @@ async function syncProducts(db, store) {
 
     const staleProductIds = new Set(db.products.filter(isStale).map((p) => p.id));
     db.products = db.products.filter((p) => !isStale(p));
-    // drop.id === product.id no nosso modelo (1 produto = 1 drop)
-    db.drops = db.drops.filter((d) => !(d.id.startsWith("shopify-") && !keepIds.has(d.id)));
+    // drop.id === product.id no nosso modelo (1 produto = 1 drop), e só a
+    // loja exclusivo cria drop — se não checar isso aqui, sincronizar só a
+    // loja básico (ex: via webhook) apaga por engano os drops da exclusivo.
+    if (store.type === "exclusivo") {
+      db.drops = db.drops.filter((d) => !(d.id.startsWith("shopify-") && !keepIds.has(d.id)));
+    }
     db.orders = db.orders.filter((o) => !staleProductIds.has(o.productId));
   }
 
@@ -180,6 +184,20 @@ async function syncAll() {
   return { synced: true, stores: stores.map((s) => s.shop) };
 }
 
+// Ressincroniza só uma loja — usado pelo webhook do Shopify (orders/*), pra
+// reagir na hora sem esperar o polling de 5 min nem mexer na outra loja.
+async function syncStoreByShopDomain(shopDomain) {
+  const store = configuredStores().find((s) => s.shop === shopDomain);
+  if (!store) return { synced: false, reason: `Loja não configurada: ${shopDomain}` };
+
+  const db = await load();
+  const shopifyProducts = await syncProducts(db, store);
+  await syncOrders(db, store, shopifyProducts);
+  await save(db);
+
+  return { synced: true, store: store.shop };
+}
+
 // Simula o que acontece quando o Shopify confirma o envio de um pedido:
 // o pedido sai da fila de não processado e o estoque real cai em 1.
 // Quando o webhook de orders/fulfilled estiver configurado, ele chama isso
@@ -202,4 +220,4 @@ async function markProcessado(orderId) {
   return db;
 }
 
-module.exports = { syncAll, markProcessado, configuredStores };
+module.exports = { syncAll, syncStoreByShopDomain, markProcessado, configuredStores, STORES };
