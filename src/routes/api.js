@@ -58,6 +58,9 @@ function buildCatalogVariants(db) {
         size: data.size,
         color: data.color || null,
         estoqueReal: data.estoqueReal,
+        // Preço de venda real vindo da Shopify (sync) — null enquanto o
+        // produto não passou por um sync desde que este campo existe.
+        price: data.price ?? null,
       })),
     };
   });

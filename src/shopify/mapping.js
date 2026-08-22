@@ -51,7 +51,11 @@ function mapProduct(shopifyProduct, storeType) {
   for (const variant of shopifyProduct.variants || []) {
     const { size, color } = readVariantAttributes(shopifyProduct, variant);
     const key = variantKey(size, color);
-    if (!sizes[key]) sizes[key] = { size, color, estoqueReal: 0 };
+    // Shopify manda price como string (ex.: "289.90") — preço de venda de
+    // verdade, usado pelo sistema de vendas externas pra não precisar
+    // digitar na mão (docs/decisions no repo mental-madness-vendas-externas).
+    const price = variant.price != null ? Number(variant.price) : null;
+    if (!sizes[key]) sizes[key] = { size, color, estoqueReal: 0, price };
   }
 
   const product = {
