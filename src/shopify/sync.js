@@ -80,15 +80,6 @@ function mergeDrop(existing, incoming) {
 async function syncProducts(db, store) {
   let shopifyProducts = await fetchAllPages(store, "products.json?limit=250");
 
-  const beforeCount = shopifyProducts.length;
-
-  const dropKeyword =
-    store.currentDropKeyword ||
-    (store.type === "exclusivo" ? detectCurrentDropKeyword(shopifyProducts) : null);
-  if (dropKeyword) {
-    const keyword = dropKeyword.toLowerCase();
-    shopifyProducts = shopifyProducts.filter((sp) => sp.title.toLowerCase().includes(keyword));
-  }
   if (store.excludeKeywords && store.excludeKeywords.length > 0) {
     const excludeList = store.excludeKeywords.map((k) => k.toLowerCase());
     shopifyProducts = shopifyProducts.filter(
@@ -96,10 +87,29 @@ async function syncProducts(db, store) {
     );
   }
 
-  if (shopifyProducts.length !== beforeCount) {
-    // esconde (remove local) produto/drop/pedido que não passou no filtro
-    // dessa loja — só existe uma loja de cada tipo, então "type === X" já
-    // basta pra identificar o que é dela
+  // "Drop atual" (só pra loja exclusivo): usado só pra marcar cada
+  // produto/drop com isCurrentDrop — NÃO mais pra tirar do banco os drops
+  // antigos. Antes, um drop antigo sumia do banco inteiro no próximo sync,
+  // o que também o fazia sumir do catálogo do sistema de vendas externas —
+  // mesmo quando o Vitor recolocava alguma peça de drop antigo à venda de
+  // verdade no Shopify. Agora todo drop que ainda existe no Shopify
+  // continua sincronizado; só a tela de produção (buildProductionList em
+  // routes/api.js) filtra pelo drop atual, usando essa mesma flag.
+  const dropKeywordRaw =
+    store.currentDropKeyword ||
+    (store.type === "exclusivo" ? detectCurrentDropKeyword(shopifyProducts) : null);
+  const dropKeyword = dropKeywordRaw ? dropKeywordRaw.toLowerCase() : null;
+
+  // Roda sempre (não só quando excludeKeywords filtrou algo) — sem o
+  // filtro de drop atual aqui dentro, "shopifyProducts.length !==
+  // beforeCount" deixou de ser um sinal confiável de "sumiu alguma coisa".
+  // isStale já é naturalmente vazio quando nada precisa ser removido, então
+  // rodar sempre é seguro, só um pouco redundante.
+  {
+    // esconde (remove local) produto/drop/pedido que não existe mais de
+    // verdade nessa loja no Shopify (excluído por excludeKeywords, ou
+    // apagado/renomeado lá) — só existe uma loja de cada tipo, então
+    // "type === X" já basta pra identificar o que é dela
     const keepIds = new Set(shopifyProducts.map((sp) => `shopify-${sp.id}`));
     const isStale = (item) =>
       item.type === store.type && item.id.startsWith("shopify-") && !keepIds.has(item.id);
@@ -116,6 +126,9 @@ async function syncProducts(db, store) {
   }
 
   for (const sp of shopifyProducts) {
+    const isCurrentDrop =
+      store.type !== "exclusivo" || !dropKeyword || sp.title.toLowerCase().includes(dropKeyword);
+
     const product = { ...mapProduct(sp, store.type), _store: store.shop };
     const existing = db.products.find((p) => p.id === product.id);
     const merged = mergeProduct(existing, product);
@@ -127,7 +140,7 @@ async function syncProducts(db, store) {
     }
 
     if (store.type === "exclusivo") {
-      const drop = { ...mapDrop(sp), _store: store.shop };
+      const drop = { ...mapDrop(sp), _store: store.shop, isCurrentDrop };
       const existingDrop = db.drops.find((d) => d.id === drop.id);
       const mergedDrop = mergeDrop(existingDrop, drop);
       if (existingDrop) Object.assign(existingDrop, mergedDrop);

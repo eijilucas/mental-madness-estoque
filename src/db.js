@@ -51,6 +51,7 @@ async function load() {
     name: d.name,
     status: d.status,
     closedAt: d.closed_at,
+    isCurrentDrop: d.is_current_drop,
   }));
 
   const orders = orderRows.map((o) => ({
@@ -85,6 +86,7 @@ async function save(db) {
     name: d.name,
     status: d.status,
     closed_at: d.closedAt || null,
+    is_current_drop: d.isCurrentDrop ?? true,
   }));
 
   const productRows = db.products.map((p) => ({
