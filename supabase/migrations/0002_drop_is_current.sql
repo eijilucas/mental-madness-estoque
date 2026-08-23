@@ -1,0 +1,13 @@
+-- Marca se um drop (loja exclusivo) é o "drop atual" (o que a
+-- auto-detecção de sync.js identifica como o mais recente) ou um drop
+-- antigo. Antes, um drop que não era o atual era simplesmente apagado do
+-- banco no próximo sync — o que também o fazia sumir do catálogo do
+-- sistema de vendas externas, mesmo quando o Vitor recolocava alguma peça
+-- de drop antigo à venda de verdade no Shopify (ex.: calça de drop
+-- anterior). Agora todo drop que ainda existe no Shopify continua
+-- sincronizado; só a tela de produção (GET /api/production) filtra pelo
+-- drop atual, usando esta coluna.
+--
+-- Default true pra não quebrar linhas já existentes até o próximo sync
+-- recalcular o valor de verdade.
+alter table drops add column is_current_drop boolean not null default true;

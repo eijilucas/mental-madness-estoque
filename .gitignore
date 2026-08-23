@@ -4,3 +4,4 @@ data/db.json
 
 .vercel
 .env*
+supabase/.temp/

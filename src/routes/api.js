@@ -83,7 +83,18 @@ async function buildProductionList() {
 
   const dropById = Object.fromEntries(drops.map((d) => [d.id, d]));
 
-  const result = products.map((product) => {
+  // A partir daqui o sync mantém no banco TODO drop que ainda existe no
+  // Shopify, não só o atual (ver docs/decisions no repo
+  // mental-madness-vendas-externas) — senão o catálogo de vendas externas
+  // perde peça de drop antigo que o Vitor recoloca à venda. Mas a tela de
+  // produção continua só sobre o drop atual, exatamente como antes.
+  const relevantProducts = products.filter((product) => {
+    if (product.type !== "exclusivo") return true;
+    const drop = product.dropId ? dropById[product.dropId] : null;
+    return drop ? drop.isCurrentDrop !== false : true;
+  });
+
+  const result = relevantProducts.map((product) => {
     const rows =
       product.type === "exclusivo"
         ? calcExclusivo(product, orders)
