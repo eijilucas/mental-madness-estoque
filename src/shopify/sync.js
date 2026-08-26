@@ -78,7 +78,18 @@ function mergeDrop(existing, incoming) {
 }
 
 async function syncProducts(db, store) {
-  let shopifyProducts = await fetchAllPages(store, "products.json?limit=250");
+  // A Shopify só devolve produto "active" por padrão em GET /products.json
+  // — arquivado (drop antigo que saiu de linha) nem aparece na resposta.
+  // Pra loja exclusivo isso escondia por completo um drop antigo que ainda
+  // existe no Shopify (ex.: Darkmoon Blood), mesmo depois do fix que parou
+  // de apagar esses drops do nosso banco — a peça nunca chegava a ser lida
+  // pra começo de conversa. status=any traz tudo (ativo/arquivado/rascunho);
+  // active/status continuam refletindo o estado real via mapDrop().
+  // Loja básico não muda: lá "active" sempre foi o esperado (catálogo de
+  // venda contínua), e mexer nisso afetaria a tela de produção do Vitor.
+  const productsPath =
+    store.type === "exclusivo" ? "products.json?limit=250&status=any" : "products.json?limit=250";
+  let shopifyProducts = await fetchAllPages(store, productsPath);
 
   if (store.excludeKeywords && store.excludeKeywords.length > 0) {
     const excludeList = store.excludeKeywords.map((k) => k.toLowerCase());
