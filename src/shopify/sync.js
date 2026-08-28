@@ -78,18 +78,28 @@ function mergeDrop(existing, incoming) {
 }
 
 async function syncProducts(db, store) {
-  // A Shopify só devolve produto "active" por padrão em GET /products.json
-  // — arquivado (drop antigo que saiu de linha) nem aparece na resposta.
-  // Pra loja exclusivo isso escondia por completo um drop antigo que ainda
-  // existe no Shopify (ex.: Darkmoon Blood), mesmo depois do fix que parou
-  // de apagar esses drops do nosso banco — a peça nunca chegava a ser lida
-  // pra começo de conversa. status=any traz tudo (ativo/arquivado/rascunho);
-  // active/status continuam refletindo o estado real via mapDrop().
-  // Loja básico não muda: lá "active" sempre foi o esperado (catálogo de
-  // venda contínua), e mexer nisso afetaria a tela de produção do Vitor.
-  const productsPath =
-    store.type === "exclusivo" ? "products.json?limit=250&status=any" : "products.json?limit=250";
-  let shopifyProducts = await fetchAllPages(store, productsPath);
+  // TENTATIVA REVERTIDA: passar status=any aqui pra tentar trazer produto
+  // arquivado (ver git log) fez a Shopify devolver ZERO produtos pra loja
+  // exclusivo — não sabemos ainda por quê (scope da app? versão da API?) —
+  // e isso, combinado com o bug corrigido abaixo, apagou os 43 produtos e
+  // todos os drops do banco. Voltando pro que sabemos que funciona até
+  // investigar com calma; não é a prioridade agora.
+  let shopifyProducts = await fetchAllPages(store, "products.json?limit=250");
+
+  // Nunca interpreta uma resposta VAZIA da Shopify como "todo produto foi
+  // removido de lá" — isso é infinitamente mais provável de ser erro de
+  // API/rede/permissão do que a loja ter zerado de verdade, e apagar tudo
+  // nesse caso é catastrófico (foi exatamente isso que aconteceu aqui: um
+  // parâmetro de busca ruim devolveu 0 produtos e o código de baixo,
+  // interpretando isso como "nada mais existe", apagou produtos, variantes
+  // E drops inteiros). Se a Shopify realmente não tem nada dessa loja,
+  // simplesmente não atualiza nada nesse sync — bem mais seguro que apagar.
+  if (shopifyProducts.length === 0) {
+    console.error(
+      `syncProducts: Shopify devolveu 0 produtos pra ${store.shop} — pulando sync dessa loja (nada foi apagado) pra evitar perda de dados.`
+    );
+    return shopifyProducts;
+  }
 
   if (store.excludeKeywords && store.excludeKeywords.length > 0) {
     const excludeList = store.excludeKeywords.map((k) => k.toLowerCase());
