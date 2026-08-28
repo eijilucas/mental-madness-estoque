@@ -23,9 +23,21 @@ function isCatalogReadAuthorized(req) {
   return Boolean(expected) && got === expected;
 }
 
+// Autenticação do endpoint que DISPARA um sync real com o Shopify, pedido
+// pelo botão "Solicitar sincronização" do sistema de vendas externas.
+// Secret dedicado, diferente do de leitura (CATALOG_READ_SECRET) — esse aqui
+// tem efeito colateral real (chama a API do Shopify), então convém poder
+// rotacionar/revogar sem afetar quem só lê o catálogo.
+function isCatalogSyncAuthorized(req) {
+  const expected = process.env.CATALOG_SYNC_SECRET;
+  const got = (req.headers.authorization || "").replace(/^Bearer\s+/i, "");
+  return Boolean(expected) && got === expected;
+}
+
 // Rotas que não exigem sessão logada — login em si, o cron (usa CRON_SECRET)
 // e os webhooks do mm-etiquetas / vendas externas (usam seus próprios
-// segredos, checados à parte em isAuthorized/isCatalogReadAuthorized).
+// segredos, checados à parte em isAuthorized/isCatalogReadAuthorized/
+// isCatalogSyncAuthorized).
 const PUBLIC_ROUTES = new Set([
   "/api/auth/login",
   "/api/cron-sync",
@@ -33,6 +45,7 @@ const PUBLIC_ROUTES = new Set([
   "/api/mm-etiquetas/label-cancelled",
   "/api/webhooks/shopify",
   "/api/catalog/variants",
+  "/api/catalog/sync",
 ]);
 
 function readRawBody(req) {
@@ -292,6 +305,26 @@ async function handleApi(req, res, url) {
     res.end(
       JSON.stringify({ syncedAt: new Date().toISOString(), products: buildCatalogVariants(db) }),
     );
+    return true;
+  }
+
+  // Dispara um sync real com o Shopify (mesma função usada pelo cron),
+  // pedido pelo botão "Solicitar sincronização" do sistema de vendas
+  // externas. Efeito colateral real — por isso o secret dedicado
+  // (isCatalogSyncAuthorized), diferente do de leitura.
+  if (req.method === "POST" && url.pathname === "/api/catalog/sync") {
+    if (!isCatalogSyncAuthorized(req)) {
+      res.statusCode = 401;
+      res.end(JSON.stringify({ error: "unauthorized" }));
+      return true;
+    }
+    try {
+      const result = await syncAll();
+      res.end(JSON.stringify(result));
+    } catch (err) {
+      res.statusCode = 502;
+      res.end(JSON.stringify({ error: `Falha ao sincronizar com o Shopify: ${err.message}` }));
+    }
     return true;
   }
 
