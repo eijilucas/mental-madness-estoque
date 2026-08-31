@@ -3,6 +3,7 @@ const { calcExclusivo, calcBasico, isCritico } = require("../calc/produce");
 const { variantKey } = require("../calc/variantKey");
 const { markProcessado, syncAll, syncStoreByShopDomain, configuredStores, STORES } = require("../shopify/sync");
 const { applyLabelGenerated, applyLabelCancelled } = require("../mmEtiquetas");
+const { applyExternalLabelGenerated, applyExternalLabelCancelled } = require("../mmEtiquetasExternal");
 const { loginWithPassword } = require("../auth/supabaseAuth");
 const { setSessionCookies, clearSessionCookies, getSessionUser } = require("../auth/session");
 const { verifyHmac } = require("../shopify/webhookAuth");
@@ -43,6 +44,8 @@ const PUBLIC_ROUTES = new Set([
   "/api/cron-sync",
   "/api/mm-etiquetas/label-generated",
   "/api/mm-etiquetas/label-cancelled",
+  "/api/mm-etiquetas/external-label-generated",
+  "/api/mm-etiquetas/external-label-cancelled",
   "/api/webhooks/shopify",
   "/api/catalog/variants",
   "/api/catalog/sync",
@@ -433,6 +436,53 @@ async function handleApi(req, res, url) {
         return true;
       }
       const result = await applyLabelCancelled(body.shopifyOrderId, body.items);
+      res.end(JSON.stringify({ ok: true, ...result }));
+    } catch (err) {
+      res.statusCode = 400;
+      res.end(JSON.stringify({ error: err.message }));
+    }
+    return true;
+  }
+
+  // Mesma coisa que label-generated/label-cancelled acima, mas pra pedido do
+  // sistema de Vendas Externas — sem shopifyOrderId/shopifyLineItemId de
+  // verdade, casa por catalog_product_id + tamanho/cor (ver mmEtiquetasExternal.js).
+  if (req.method === "POST" && url.pathname === "/api/mm-etiquetas/external-label-generated") {
+    if (!isAuthorized(req)) {
+      res.statusCode = 401;
+      res.end(JSON.stringify({ error: "Não autorizado" }));
+      return true;
+    }
+    try {
+      const body = await readJsonBody(req);
+      if (!body.externalOrderId || !Array.isArray(body.items)) {
+        res.statusCode = 400;
+        res.end(JSON.stringify({ error: "externalOrderId e items (array) são obrigatórios" }));
+        return true;
+      }
+      const result = await applyExternalLabelGenerated(body.externalOrderId, body.items);
+      res.end(JSON.stringify({ ok: true, ...result }));
+    } catch (err) {
+      res.statusCode = 400;
+      res.end(JSON.stringify({ error: err.message }));
+    }
+    return true;
+  }
+
+  if (req.method === "POST" && url.pathname === "/api/mm-etiquetas/external-label-cancelled") {
+    if (!isAuthorized(req)) {
+      res.statusCode = 401;
+      res.end(JSON.stringify({ error: "Não autorizado" }));
+      return true;
+    }
+    try {
+      const body = await readJsonBody(req);
+      if (!body.externalOrderId || !Array.isArray(body.items)) {
+        res.statusCode = 400;
+        res.end(JSON.stringify({ error: "externalOrderId e items (array) são obrigatórios" }));
+        return true;
+      }
+      const result = await applyExternalLabelCancelled(body.externalOrderId, body.items);
       res.end(JSON.stringify({ ok: true, ...result }));
     } catch (err) {
       res.statusCode = 400;
