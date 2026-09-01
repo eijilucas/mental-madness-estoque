@@ -178,16 +178,16 @@ function renderProductionSummary(products) {
 
   rows.sort((a, b) => b.produzir - a.produzir);
 
-  const items = rows
+  const trs = rows
     .map(
       (r) => `
-        <button class="summary-item" data-row-key="${r.rowKey}">
-          <span class="summary-qty">${r.produzir}</span>
-          <span class="summary-info">
-            <span class="summary-name">${r.name}</span>
-            <span class="summary-meta">${r.size}${r.color ? " · " + r.color : ""} · ${r.type === "exclusivo" ? "Exclusivo" : "Básico"}</span>
-          </span>
-        </button>`
+        <tr class="summary-row" data-row-key="${r.rowKey}">
+          <td>${r.name}</td>
+          <td class="mono">${r.size}</td>
+          <td>${r.color || "—"}</td>
+          <td class="mono">${r.type === "exclusivo" ? "Exclusivo" : "Básico"}</td>
+          <td class="produce pos mono">${r.produzir}</td>
+        </tr>`
     )
     .join("");
 
@@ -197,7 +197,20 @@ function renderProductionSummary(products) {
         <h2>Produzir agora</h2>
         <span class="pill warn">${rows.length} ${rows.length === 1 ? "item" : "itens"}</span>
       </div>
-      <div class="summary-grid">${items}</div>
+      <div class="summary-scroll">
+        <table class="prod">
+          <thead>
+            <tr>
+              <th>Produto</th>
+              <th class="mono">Tam.</th>
+              <th>Cor</th>
+              <th class="mono">Tipo</th>
+              <th class="mono">Produzir</th>
+            </tr>
+          </thead>
+          <tbody>${trs}</tbody>
+        </table>
+      </div>
     </div>`;
 }
 
@@ -239,9 +252,9 @@ async function render() {
     renderAlertbar(products);
     renderProductionSummary(products);
 
-    document.getElementById("summary").querySelectorAll(".summary-item").forEach((btn) => {
-      btn.addEventListener("click", () => {
-        const row = document.querySelector(`tr[data-row-key="${btn.dataset.rowKey}"]`);
+    document.getElementById("summary").querySelectorAll(".summary-row").forEach((tr) => {
+      tr.addEventListener("click", () => {
+        const row = document.querySelector(`#groups tr[data-row-key="${tr.dataset.rowKey}"]`);
         if (!row) return;
         row.scrollIntoView({ behavior: "smooth", block: "center" });
         row.classList.remove("flash-highlight");
