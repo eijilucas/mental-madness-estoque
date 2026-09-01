@@ -150,6 +150,57 @@ function renderAlertbar(products) {
     .join("");
 }
 
+// Box logo no topo com a quantidade de cada peça (tamanho+cor) que precisa
+// ser produzida agora — pra não precisar rolar as tabelas de cada produto só
+// pra montar a lista de produção.
+function renderProductionSummary(products) {
+  const rows = [];
+  for (const product of products) {
+    for (const row of product.sizes) {
+      if (row.produzir > 0) {
+        rows.push({
+          rowKey: `${product.id}::${row.size}::${row.color || ""}`,
+          name: product.name,
+          type: product.type,
+          size: row.size,
+          color: row.color || null,
+          produzir: row.produzir,
+        });
+      }
+    }
+  }
+
+  const summaryEl = document.getElementById("summary");
+  if (rows.length === 0) {
+    summaryEl.innerHTML = "";
+    return;
+  }
+
+  rows.sort((a, b) => b.produzir - a.produzir);
+
+  const items = rows
+    .map(
+      (r) => `
+        <button class="summary-item" data-row-key="${r.rowKey}">
+          <span class="summary-qty">${r.produzir}</span>
+          <span class="summary-info">
+            <span class="summary-name">${r.name}</span>
+            <span class="summary-meta">${r.size}${r.color ? " · " + r.color : ""} · ${r.type === "exclusivo" ? "Exclusivo" : "Básico"}</span>
+          </span>
+        </button>`
+    )
+    .join("");
+
+  summaryEl.innerHTML = `
+    <div class="panel">
+      <div class="panel-head">
+        <h2>Produzir agora</h2>
+        <span class="pill warn">${rows.length} ${rows.length === 1 ? "item" : "itens"}</span>
+      </div>
+      <div class="summary-grid">${items}</div>
+    </div>`;
+}
+
 function renderKpis(summary) {
   document.getElementById("kpi-produzir").textContent = summary.pecasAProduzir;
   document.getElementById("kpi-pedidos").textContent = summary.pedidosNaoProcessados;
@@ -186,6 +237,18 @@ async function render() {
 
     renderKpis(summary);
     renderAlertbar(products);
+    renderProductionSummary(products);
+
+    document.getElementById("summary").querySelectorAll(".summary-item").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const row = document.querySelector(`tr[data-row-key="${btn.dataset.rowKey}"]`);
+        if (!row) return;
+        row.scrollIntoView({ behavior: "smooth", block: "center" });
+        row.classList.remove("flash-highlight");
+        void row.offsetWidth;
+        row.classList.add("flash-highlight");
+      });
+    });
 
     groups.querySelectorAll(".stockadj button").forEach((btn) => {
       btn.addEventListener("click", async () => {

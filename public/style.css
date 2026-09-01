@@ -130,6 +130,30 @@ body {
 }
 .bellpanel-empty { padding: 24px 16px; text-align: center; color: var(--text-label); font-size: 13px; }
 
+.summary-grid {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 1px;
+  background: var(--border-subtle);
+}
+.summary-item {
+  display: flex; align-items: center; gap: 12px; text-align: left;
+  padding: 14px 20px; border: none; background: var(--bg-card); color: var(--text-secondary);
+  cursor: pointer; font-family: var(--body);
+}
+.summary-item:hover { background: rgba(255,255,255,0.04); }
+.summary-qty {
+  font-family: var(--display); font-weight: 900; font-size: 22px; color: var(--text-primary);
+  min-width: 1.6em; text-align: right; font-variant-numeric: tabular-nums;
+}
+.summary-info { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.summary-name {
+  font-size: 12.5px; font-weight: 600; color: var(--text-primary);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.summary-meta {
+  font-family: var(--mono); font-size: 10.5px; letter-spacing: 0.03em; color: var(--text-label);
+  text-transform: uppercase;
+}
+
 tr.flash-highlight { animation: flash-highlight 1.6s ease; }
 @keyframes flash-highlight {
   0%, 100% { background: transparent; }
